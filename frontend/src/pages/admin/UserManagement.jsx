@@ -12,7 +12,7 @@ const STATUS_COLORS = {
   Pending: 'badge-pending', 
   Approved: 'badge-approved', 
   Rejected: 'badge-rejected',
-  Locked: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 font-medium px-2.5 py-0.5 rounded-full text-xs inline-flex items-center gap-1',
+  Locked: 'badge-locked',
   Deactivated: 'badge-rejected'
 }
 

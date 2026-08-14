@@ -139,6 +139,7 @@
   .badge-draft    { @apply badge bg-earth-paper text-earth-ink; }
   .badge-published{ @apply badge bg-earth-forest text-earth-paper; }
   .badge-closed   { @apply badge bg-earth-clay text-earth-paper; }
+  .badge-locked   { @apply badge bg-amber-600 text-white font-bold; }
   .stat-block {
     @apply bg-earth-cream border-[3px] border-earth-ink shadow-brutal p-6;
   }
