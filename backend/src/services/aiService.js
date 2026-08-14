@@ -55,22 +55,26 @@ Your knowledge is strictly limited to the following FAQ database:
 ${faqContext}
 ---
 
-User's question: "${userQuestion}"
+User's input: "${userQuestion}"
 
 Instructions:
-1. RESPONSE LANGUAGE (CRITICAL):
-   - You MUST detect the language of the user's question.
-   - You MUST respond in the EXACT SAME LANGUAGE as the user's question.
-   - If the question is in English, reply entirely in clear, natural English.
-   - If the question is in Vietnamese, reply entirely in clear, natural Vietnamese.
+1. RESPONSE LANGUAGE (STRICT CRITICAL RULE):
+   - You MUST detect the language of the user's input.
+   - If the user writes or greets in English (e.g. "hi", "hello", "how do I...", "what is..."), you MUST respond 100% in English.
+   - If the user writes in Vietnamese, respond 100% in Vietnamese.
+   - NEVER respond in Vietnamese to an English input or greeting!
 
-2. CROSS-LINGUAL CONTEXT MATCHING:
+2. GREETINGS & CASUAL CONVERSATION:
+   - If the user gives a greeting in English (e.g. "hi", "hello", "hey", "good morning"): Reply politely in English welcoming them and asking how you can assist them with EcoSurvey (surveys, points, participation reports).
+   - If the user gives a greeting in Vietnamese ("xin chào", "chào bạn"): Reply politely in Vietnamese.
+
+3. CROSS-LINGUAL CONTEXT MATCHING:
    - The FAQ database provided above might be in Vietnamese or English. You MUST translate and match the semantic meaning of the user's question to the FAQ context regardless of language differences.
-   - Example: If the FAQ is in Vietnamese ("Làm thế nào để đổi điểm?") and the user asks in English ("How do I redeem points?"), extract the answer from the Vietnamese FAQ and formulate your answer in English.
+   - Example: If the FAQ is in Vietnamese ("Làm thế nào để đổi điểm?") and the user asks in English ("How do I redeem points?"), extract the answer from the Vietnamese FAQ and formulate your response in natural English.
 
-3. CONSTRAINTS:
-   - Answer ONLY based on the FAQ context above.
-   - If the question is not covered in the FAQs, politely explain that you do not have that information in your knowledge base and advise them to contact the Administrator — written in the SAME LANGUAGE as the user's question.
+4. CONSTRAINTS FOR SPECIFIC QUESTIONS:
+   - For specific questions, answer ONLY based on the FAQ context above.
+   - If the question is not covered in the FAQs, politely explain that you do not have that information in your knowledge base and advise them to contact the Administrator — written in the SAME LANGUAGE as the user's input.
    - Be concise, polite, and professional.`;
 
     return await callOpenRouter(prompt);
@@ -102,12 +106,28 @@ Provide only the summary, no introduction or extra text.`;
 
 // Mock data fallback function when AI API key is not configured.
 function mockFAQAnswer(question, faqs) {
-  const q = question.toLowerCase();
+  const q = question.trim().toLowerCase();
+
+  // Basic greeting check for mock fallback
+  if (['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'hi there'].includes(q)) {
+    return "Hello! How can I assist you with EcoSurvey today?";
+  }
+  if (['chào', 'xin chào', 'chào bạn', 'alo', 'hi bạn'].includes(q)) {
+    return "Xin chào! Tôi có thể giúp gì cho bạn về hệ thống EcoSurvey hôm nay?";
+  }
+
   for (const faq of faqs) {
     const words = faq.question.toLowerCase().split(/\s+/);
     const matchCount = words.filter((w) => w.length > 3 && q.includes(w)).length;
     if (matchCount >= 2) return faq.answer;
   }
+
+  // Detect basic English vs Vietnamese for fallback response
+  const isEnglish = /[a-zA-Z]/.test(q) && !/[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i.test(q);
+  if (isEnglish) {
+    return "I don't have information on this topic in the FAQ database. Please contact the Administrator for assistance.";
+  }
+
   return "Tôi không có thông tin về chủ đề này. Vui lòng liên hệ Quản trị viên để được hỗ trợ chi tiết hơn.";
 }
 

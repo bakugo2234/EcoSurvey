@@ -1,14 +1,32 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { MessageCircle, X, Send, Bot, User } from 'lucide-react'
 import { aiService } from '../../services/aiService'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTranslation } from 'react-i18next'
 
 export default function FAQChatWidget() {
   const { user } = useAuth()
+  const { t, i18n } = useTranslation('common')
   const [open, setOpen] = useState(false)
+  
+  const getInitialGreeting = () => 
+    i18n.language === 'vi' 
+      ? "Xin chào! Tôi là Trợ lý AI của EcoSurvey. Bạn có thể hỏi tôi bất kỳ điều gì về hệ thống — khảo sát, điểm thưởng, minh chứng hoạt động và nhiều hơn nữa!" 
+      : "Hi! I'm the EcoSurvey AI Assistant. Ask me anything about the portal — surveys, points, participation reports, and more!"
+
   const [messages, setMessages] = useState([
-    { role: 'bot', text: "Hi! I'm the EcoSurvey AI Assistant. Ask me anything about the portal — surveys, points, participation reports, and more!" }
+    { role: 'bot', text: getInitialGreeting() }
   ])
+
+  useEffect(() => {
+    setMessages((prev) => {
+      if (prev.length === 1 && prev[0].role === 'bot') {
+        return [{ role: 'bot', text: getInitialGreeting() }]
+      }
+      return prev
+    })
+  }, [i18n.language])
+
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
 
