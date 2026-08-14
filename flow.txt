@@ -187,3 +187,54 @@ Dưới đây là 5 cơ chế Fallback chính đang được triển khai trong 
                     BÁO CÁO HOÀN TẤT — ECOSURVEY AUTH & FALLBACK FLOW
 ================================================================================
 
+--------------------------------------------------------------------------------
+V. CƠ CHẾ BẢO MẬT HELMET CONTENT SECURITY POLICY (CSP)
+--------------------------------------------------------------------------------
+
+1. Giới thiệu chung về Helmet & CSP:
+   - Helmet là thư viện Security Middleware chuẩn cho Express.js (`helmet^7.1.0`), 
+     giúp thiết lập các HTTP Response Headers bảo mật nhằm phòng chống các nguy cơ 
+     tấn công mạng phổ biến như XSS (Cross-Site Scripting), Clickjacking, MIME-sniffing, v.v.
+   - File cấu hình: `backend/src/server.js` (dòng 39 - 59).
+   - Vị trí thực thi: Kích hoạt ngay đầu pipeline của Express app (`app.use(helmet({...}))`), 
+     bảo vệ tất cả các API endpoints gửi và nhận dữ liệu trong EcoSurvey.
+
+2. Cơ chế hoạt động của Content Security Policy (CSP):
+   - CSP hoạt động dựa trên nguyên lý Danh sách trắng (Whitelist Enforcement).
+   - Khi Client (Trình duyệt) gửi HTTP request tới Backend, Backend trả về Response kèm 
+     HTTP Header `Content-Security-Policy`.
+   - Trình duyệt sẽ đọc các quy tắc (Directives) trong Header này và chỉ cho phép 
+     tải, thực thi mã nguồn hoặc hiển thị hình ảnh từ các nguồn (Domain/CDN) đã được phê duyệt.
+   - Nếu Hacker chèn một đoạn mã độc (XSS Injection) từ domain xấu lạ (ví dụ: `http://hacker.com/malicious.js`), 
+     trình duyệt sẽ tự động CHẶN NGAY LẬP TỨC và bật cảnh báo bảo mật trên Developer Console.
+
+3. Chi tiết triển khai các quy định (Directives) trong EcoSurvey:
+   - `defaultSrc: ["'self'"]`: 
+     Chỉ cho phép tải các tài nguyên mặc định từ chính origin domain của hệ thống.
+   - `scriptSrc: ["'self'", "'unsafe-inline'"]`: 
+     Cho phép thực thi mã JavaScript từ chính server và các inline script cần thiết cho React/Vite.
+   - `styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"]`: 
+     Cho phép tải CSS nội bộ và Google Fonts (Roboto, Outfit, Inter).
+   - `fontSrc: ["'self'", "https://fonts.gstatic.com"]`: 
+     Cho phép hiển thị Font chữ nạp từ CDN chính thức của Google Fonts Static.
+   - `imgSrc: ["'self'", "data:", "blob:", "https://res.cloudinary.com"]`: 
+     Cho phép hiển thị ảnh local, ảnh xem trước dạng Blob/Base64 và ảnh Cloudinary CDN 
+     (lưu trữ Avatar người dùng và minh chứng hoạt động gửi lên).
+   - `connectSrc: ["'self'"]`: 
+     Giới hạn kết nối AJAX/Fetch và WebSocket (Socket.IO) chỉ giao tiếp với các Server hợp lệ của ứng dụng.
+   - `objectSrc: ["'none'"]`: 
+     Cấm hoàn toàn việc nhúng các đối tượng nguy hiểm rủi ro cao như Flash, Java Applets (`<object>`, `<embed>`).
+   - `frameAncestors: ["'none'"]`: 
+     Cấm hoàn toàn việc iframe hóa website EcoSurvey trên trang web khác, ngăn chặn triệt để tấn công Clickjacking (UI Redress Attack).
+
+4. Các Security Headers bổ sung đi kèm trong Helmet:
+   - `HSTS (Strict-Transport-Security)`: Cấu hình `maxAge: 63072000` (2 năm), `includeSubDomains: true`, 
+     `preload: true` → Ép buộc trình duyệt luôn dùng giao thức bảo mật mã hóa HTTPS.
+   - `Referrer-Policy`: Thiết lập `strict-origin-when-cross-origin`, bảo vệ thông tin đường dẫn người dùng.
+   - `X-Content-Type-Options`: Ngăn chặn hành vi đoán loại file nguy hiểm (MIME-type sniffing).
+
+================================================================================
+            BÁO CÁO HOÀN TẤT — ECOSURVEY AUTH, FALLBACK & CSP FLOW
+================================================================================
+
+
