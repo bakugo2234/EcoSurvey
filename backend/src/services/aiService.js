@@ -48,7 +48,7 @@ exports.answerFAQ = async (userQuestion, faqs) => {
   try {
     const faqContext = faqs.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n');
 
-    const prompt = `You are a helpful assistant for EcoSurvey, an environmental awareness survey portal at an educational institution.
+    const prompt = `You are an intelligent, helpful assistant for EcoSurvey, an environmental awareness survey portal at an educational institution.
 
 Your knowledge is strictly limited to the following FAQ database:
 ---
@@ -58,10 +58,20 @@ ${faqContext}
 User's question: "${userQuestion}"
 
 Instructions:
-- Answer ONLY based on the FAQ context above.
-- If the question is not covered in the FAQs, politely explain that you don't have that information and they should contact Admin. Do this in the same language as the user's question.
-- Be concise and friendly.
-- Respond in the same language as the user's question.`;
+1. RESPONSE LANGUAGE (CRITICAL):
+   - You MUST detect the language of the user's question.
+   - You MUST respond in the EXACT SAME LANGUAGE as the user's question.
+   - If the question is in English, reply entirely in clear, natural English.
+   - If the question is in Vietnamese, reply entirely in clear, natural Vietnamese.
+
+2. CROSS-LINGUAL CONTEXT MATCHING:
+   - The FAQ database provided above might be in Vietnamese or English. You MUST translate and match the semantic meaning of the user's question to the FAQ context regardless of language differences.
+   - Example: If the FAQ is in Vietnamese ("Làm thế nào để đổi điểm?") and the user asks in English ("How do I redeem points?"), extract the answer from the Vietnamese FAQ and formulate your answer in English.
+
+3. CONSTRAINTS:
+   - Answer ONLY based on the FAQ context above.
+   - If the question is not covered in the FAQs, politely explain that you do not have that information in your knowledge base and advise them to contact the Administrator — written in the SAME LANGUAGE as the user's question.
+   - Be concise, polite, and professional.`;
 
     return await callOpenRouter(prompt);
   } catch (err) {
