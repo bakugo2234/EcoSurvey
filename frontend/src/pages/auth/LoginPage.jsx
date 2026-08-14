@@ -29,7 +29,7 @@ export default function LoginPage() {
     const searchParams = new URLSearchParams(location.search)
     const errParam = searchParams.get('error')
     if (errParam === 'pending') {
-      toast.error(t('auth:error.pending', 'Tài khoản của bạn đang chờ Admin phê duyệt.'))
+      toast.error(t('auth:error.pendingLogin', 'Tài khoản của bạn đang chờ Quản trị viên phê duyệt. Vui lòng kiểm tra email của bạn để nhận thông báo.'))
     } else if (errParam === 'rejected') {
       toast.error(t('auth:error.rejected', 'Yêu cầu đăng ký tài khoản đã bị từ chối.'))
     } else if (errParam === 'locked') {
@@ -37,7 +37,7 @@ export default function LoginPage() {
     } else if (errParam === 'deactivated') {
       toast.error(t('auth:error.deactivated', 'Tài khoản đã bị vô hiệu hóa.'))
     }
-  }, [user, navigate, location.search])
+  }, [user, navigate, location.search, t])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -58,7 +58,19 @@ export default function LoginPage() {
       }
       navigate(dest, { replace: true })
     } catch (err) {
-      toast.error(err.response?.data?.message || t('auth:toast.loginFailed'))
+      const errCode = err.response?.data?.code
+      const reason = err.response?.data?.reason
+      if (errCode === 'PENDING') {
+        toast.error(t('auth:error.pendingLogin', 'Tài khoản của bạn đang chờ Quản trị viên phê duyệt. Vui lòng kiểm tra email của bạn để nhận thông báo.'))
+      } else if (errCode === 'REJECTED') {
+        toast.error(reason ? `${t('auth:error.rejected')} ${t('auth:error.reasonPrefix', 'Lý do:')} ${reason}` : t('auth:error.rejected'))
+      } else if (errCode === 'LOCKED') {
+        toast.error(reason ? `${t('auth:error.locked')} ${t('auth:error.reasonPrefix', 'Lý do:')} ${reason}` : t('auth:error.locked'))
+      } else if (errCode === 'DEACTIVATED') {
+        toast.error(t('auth:error.deactivated'))
+      } else {
+        toast.error(err.response?.data?.message || t('auth:toast.loginFailed'))
+      }
       setCaptchaToken('')
       turnstileRef.current?.reset()
     } finally {
