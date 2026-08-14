@@ -297,275 +297,251 @@ các nhóm quan hệ chính:
 
 
 ════════════════════════════════════════════════════════════════════════
-  BẮT ĐẦU DEMO SẢN PHẨM — GIỚI THIỆU CÁC MÀN HÌNH
+  BẮT ĐẦU DEMO SẢN PHẨM — MÀN HÌNH & KIẾN TRÚC KỸ THUẬT NỀN TẢNG
 ════════════════════════════════════════════════════════════════════════
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MÀN HÌNH 1: LANDING PAGE — TRANG CHỦ GIỚI THIỆU                    │
+│  MÀN HÌNH 1: LANDING PAGE — TRANG CHỦ & LỚP BẢO VỆ REQUEST CLIENT    │
 └─────────────────────────────────────────────────────────────────────┘
 
-"Đây là trang đầu tiên user nhìn thấy khi truy cập hệ thống. Trang được
-thiết kế theo phong cách Neo-Brutalism với giao diện hiện đại, responsive, gồm các section:
+"Kính thưa thầy cô, đây là trang đầu tiên người dùng tiếp cận hệ thống, 
+thiết kế theo phong cách Neo-Brutalism hiện đại với Đa ngôn ngữ (i18n) 
+và Dark/Light theme. 
 
-  • Hero Section: Slogan chính, nút Call-to-Action 'Get Started', thống kê
-    real-time (tổng user, surveys, submissions, eco-points) được load
-    từ API /api/homepage/stats.
-
-  • Features Grid: 6 tính năng nổi bật — Online Surveys, Live Dashboard,
-    Leaderboard, AI Assistant, Secure & Private, Instant Points.
-
-  • How It Works: 3 bước đơn giản — Register → Participate → Earn & Lead.
-
-  • Trending Surveys: Danh sách khảo sát đang hot, load từ API, hiển thị
-    deadline, số lượt tham gia.
-
-  • FAQ Section: Câu hỏi thường gặp, load từ database.
-
-  • AI Chatbot Widget: Nổi ở góc phải dưới, user có thể hỏi bất kỳ câu
-    hỏi nào — AI sẽ trả lời dựa trên ngữ liệu FAQ trong database.
-
-  • Newsletter: Form đăng ký nhận thông tin — email validation.
-
-  Đặc biệt, Landing Page có hiệu ứng Scroll Animation (useInView hook)
-  và hỗ trợ đa ngôn ngữ (i18n: Tiếng Việt / English)."
+Về mặt Kỹ thuật & Bảo mật đằng sau mọi Request:
+  • Khi Client vừa truy cập, mọi HTTP request gửi lên Backend đều phải đi 
+    qua Express Security Middleware Pipeline.
+  • Lớp bảo mật Helmet CSP (Content Security Policy) lập tức đính kèm 
+    Header `Content-Security-Policy` khắt khe:
+    - `defaultSrc: ["'self'"]`: Chỉ tải tài nguyên từ origin an toàn.
+    - `scriptSrc` & `styleSrc`: Whitelist mã nguồn nội bộ và Google Fonts.
+    - `imgSrc`: Cho phép nạp ảnh local, Blob/Base64 và Cloudinary CDN.
+    - `objectSrc` & `frameAncestors`: Cấm tuyệt đối Flash và Iframe để 
+      chống triệt để tấn công Clickjacking (UI Redress).
+  • Bên cạnh đó, HSTS ép trình duyệt dùng HTTPS (maxAge 2 năm) và 
+    `generalLimiter` (300 req/phút) bảo vệ toàn server khỏi tấn công DoS."
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MÀN HÌNH 2: ĐĂNG KÝ & ĐĂNG NHẬP                                    │
+│  MÀN HÌNH 2: ĐĂNG KÝ, ĐĂNG NHẬP, CƠ CHẾ JWT & SESSION SECURITY       │
 └─────────────────────────────────────────────────────────────────────┘
 
-"Hệ thống hỗ trợ 2 phương thức đăng ký/đăng nhập:
+"Màn hình Đăng ký / Đăng nhập hỗ trợ cả Form truyền thống và Google OAuth 2.0.
 
-  ── Đăng ký bằng Form (Local Auth) ──────────────────────────────
-  • Nhập: Họ tên, Username, Email, Mật khẩu, Vai trò (Student/Staff),
-    Mã sinh viên/nhân viên, Lớp, Khoa.
-  • Cloudflare Turnstile CAPTCHA bắt buộc phải hoàn thành.
-  • Sau đăng ký → status = 'Pending' → Admin phải duyệt trước khi
-    tài khoản được kích hoạt.
-  • Hệ thống gửi email xác thực (Email Verification) qua SMTP.
+Về Cơ chế Mã hóa & Bảo mật Phiên làm việc (Auth & JWT):
+  • Đăng ký (Register): Bắt buộc vượt qua xác thực Cloudflare Turnstile 
+    CAPTCHA chống Bot spam. Mật khẩu được băm `bcrypt` (`SALT_ROUNDS = 10`). 
+    Tài khoản vừa tạo nhận `status = 'Pending'`. Backend tự động gửi Email 
+    xác nhận qua Nodemailer Gmail SMTP (`smtp.gmail.com:587` có Fallback 
+    sang cổng `465 SSL`), đồng thời phát event Socket.IO real-time báo Admin.
 
-  ── Đăng nhập bằng Google OAuth ─────────────────────────────────
-  • Click 'Sign in with Google' → Chuyển đến Google Consent Screen →
-    Chọn tài khoản → Backend tạo user nếu chưa có → Redirect về
-    Frontend kèm Access Token.
-  • Nếu là user Google mới → redirect đến trang Register để bổ sung
-    thông tin (mã SV, lớp, khoa).
+  • Đăng nhập (Login): Backend kiểm tra trạng thái CSDL. Nếu status là 
+    `Pending`/`Rejected`/`Locked` → Trả HTTP 403 từ chối ngay. 
+    Nếu `Approved` → Cấp ngay cặp JWT Tokens:
+    1. Access Token: Chuỗi JWT ngắn hạn (15 phút), chứa payload `{ user_id, 
+       role, full_name }`, mã hóa bằng `JWT_SECRET`. Trả về trong JSON body 
+       → Frontend lưu vào `localStorage`.
+    2. Refresh Token: Chuỗi ngẫu nhiên `crypto.randomBytes(64)` (30 ngày), 
+       băm SHA-256 (`token_hash`) lưu trong CSDL MySQL. Trả về qua 
+       HTTP-Only Cookie (`SameSite=None`, `Secure`) → Ngăn chặn hoàn toàn 
+       tấn công XSS đọc trộm Cookie và chống CSRF.
 
-  ── Quên mật khẩu ───────────────────────────────────────────────
-  • Nhập email → Backend sinh reset token (crypto.randomBytes) →
-    Gửi link reset qua email → User click link → Đặt mật khẩu mới.
-  • Token có thời hạn, sử dụng 1 lần."
+  • Google OAuth 2.0: Sử dụng Passport.js mã hóa tham số `state` (Base64URL) 
+    chứa origin client gốc để điều hướng động chính xác về Vercel Frontend."
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MÀN HÌNH 3: DASHBOARD CÁ NHÂN (Student/Staff)                      │
+│  MÀN HÌNH 3: DASHBOARD CÁ NHÂN & CƠ CHẾ KHÔI PHỤC PHIÊN LÀM VIỆC    │
 └─────────────────────────────────────────────────────────────────────┘
 
-"Sau khi đăng nhập, user được chuyển đến Dashboard cá nhân hiển thị:
+"Trang Dashboard cá nhân tổng hợp số liệu khảo sát, Eco-Points tích lũy, 
+thứ hạng Leaderboard và 5 giao dịch điểm gần nhất.
 
-  • Số khảo sát đã hoàn thành (Surveys Completed).
-  • Số khảo sát đang mở (Available Surveys).
-  • Tổng Eco-Points đã tích lũy.
-  • Thứ hạng hiện tại trên Leaderboard (tính bằng raw SQL query).
-  • Thống kê minh chứng: Pending / Approved / Rejected.
-  • Lịch sử hoạt động gần đây (5 giao dịch điểm mới nhất).
-
-  Dashboard được render dựa trên vai trò — Student và Staff nhìn thấy
-  số liệu cá nhân, Admin nhìn thấy tổng quan toàn hệ thống."
+Về Vận hành API & Khôi phục Phiên làm việc (Auth Session Fallback):
+  • Mọi request lấy thông tin cá nhân (`/api/auth/me`) đính kèm Access Token 
+    vào Header `Authorization: Bearer <access_token>`.
+  • Auth Session Fallback: Khi reload (F5) trang, nếu trình duyệt (như Safari) 
+    chặn 3rd-party cookie cross-domain giữa Vercel & Railway → `AuthContext` 
+    tự động lấy Access Token từ `localStorage` để duy trì phiên đăng nhập 
+    mà người dùng không bị văng ra ngoài.
+  • Axios Interceptor: Khi Access Token 15 phút hết hạn → Tự động bắt lỗi 401 
+    và âm thầm gọi `/api/auth/refresh` lấy Access Token mới qua Refresh Token 
+    Cookie mà không làm gián đoạn trải nghiệm."
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MÀN HÌNH 4: SURVEY BOARD — DANH SÁCH KHẢO SÁT                      │
+│  MÀN HÌNH 4: SURVEY BOARD — DANH SÁCH KHẢO SÁT & PHÂN QUYỀN RBAC    │
 └─────────────────────────────────────────────────────────────────────┘
 
-"Trang Survey Board hiển thị tất cả khảo sát đang Published và còn trong
-thời hạn, được lọc theo target_role của user (Student chỉ thấy khảo sát
-cho Student và All, Staff tương tự).
+"Trang Survey Board hiển thị danh sách khảo sát đang phát hành (Published).
 
-  • Mỗi survey card hiển thị: Tiêu đề, mô tả ngắn, deadline, số câu hỏi.
-  • Phân trang với helper pagination.js — giới hạn tối đa 100 items/page.
-  • Click vào survey → chuyển đến trang Survey Detail để làm bài."
+Về Phân quyền & Giới hạn Tải (RBAC & Memory Protection):
+  • Backend kiểm tra `req.user.role` để thực thi Role-Based Access Control (RBAC). 
+    Sinh viên chỉ nhìn thấy khảo sát dành cho `Student` và `All`, nhân viên chỉ 
+    thấy khảo sát cho `Staff` và `All`.
+  • Để chống tấn công cạn kiệt bộ nhớ (Memory Exhaustion DoS), helper 
+    `pagination.js` cap cứng giới hạn `limit` tối đa 100 bản ghi/request."
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MÀN HÌNH 5: SURVEY DETAIL — LÀM KHẢO SÁT                          │
+│  MÀN HÌNH 5: SURVEY DETAIL — LÀM KHẢO SÁT & CHỐNG SPAM GIAN LẬN      │
 └─────────────────────────────────────────────────────────────────────┘
 
-"Trang làm khảo sát render danh sách câu hỏi theo 4 loại:
+"Giao diện làm bài hỗ trợ 4 loại câu hỏi linh hoạt (Multiple Choice, Text, 
+Rating, Yes/No).
 
-  • multiple_choice: Radio buttons cho các lựa chọn.
-  • text: Textarea cho câu trả lời tự luận.
-  • yes_no: 2 lựa chọn Có/Không.
-
-  Khi user bấm Submit:
-  → Backend tạo SurveyResponse + các SurveyAnswer tương ứng.
-  → Cộng Eco-Points (PointLog action_type = 'Survey_Completion').
-  → Badge Service kiểm tra điều kiện SURVEY_COUNT → tự động cấp badge nếu đạt.
-  → Gửi Notification real-time qua Socket.IO.
-  → surveySubmitLimiter giới hạn 5 lần nộp/phút chống spam."
+Về Xử lý Giao dịch & Chống gian lận (ACID Transaction):
+  • `surveySubmitLimiter`: Giới hạn 5 lần submit/phút chống spam.
+  • Khi người dùng bấm Nộp bài, Backend mở một MySQL Database Transaction:
+    1. Kiểm tra CSDL đảm bảo người dùng chưa từng làm khảo sát này.
+    2. Ghi nhận `SurveyResponse` và các `SurveyAnswer` tương ứng.
+    3. Thêm nhật ký cộng điểm vào bảng `point_logs` (`action_type = 
+       'Survey_Completion'`). Bảng này thiết kế Append-only (chỉ INSERT) 
+       đảm bảo minh bạch tuyệt đối.
+    4. Kích hoạt `BadgeService` tự động quét và cấp Huy hiệu mới.
+    5. Phát thông báo real-time qua Socket.IO tới thiết bị người dùng."
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MÀN HÌNH 6: PARTICIPATION — NỘP MINH CHỨNG HOẠT ĐỘNG               │
+│  MÀN HÌNH 6: PARTICIPATION — MINH CHỨNG HOẠT ĐỘNG & AI SUMMARY     │
 └─────────────────────────────────────────────────────────────────────┘
 
-"Đây là tính năng độc đáo của EcoSurvey — cho phép user nộp minh chứng
-về hoạt động môi trường thực tế mà họ đã tham gia:
+"Màn hình cho phép sinh viên nộp minh chứng hoạt động bảo vệ môi trường 
+thực tế (hình ảnh + mô tả).
 
-  ── Submit Participation ────────────────────────────────────────
-  • Nhập: Tên sự kiện, Địa điểm, Số người tham gia, Mô tả chi tiết.
-  • Upload ảnh minh chứng (tối đa 5 file, mỗi file ≤ 5MB).
-  • File được upload lên Cloudinary → lưu URL vào ParticipationFile.
-  • Upload middleware kiểm tra CẢ file extension VÀ MIME (Mutiperpose internet mail extension) type để chống
-    tấn công giả mạo file.
-
-  ── AI Auto-Summarize ───────────────────────────────────────────
-  • Ngay khi nộp, Backend gọi Gemini AI tóm tắt báo cáo thành 2-3 câu
-    (trường ai_summary trong Participation) → Admin đọc nhanh hơn.
-
-  ── My Participations ───────────────────────────────────────────
-  • User xem danh sách minh chứng đã nộp, trạng thái (Pending/Approved/
-    Rejected), lý do từ chối (nếu có)."
+Về Bảo mật File Upload & Tích hợp AI (Cloudinary & Gemini AI):
+  • File Upload Security: Middleware `Multer` kiểm tra nghiêm ngặt CẢ 
+    đuôi file (`.jpg`, `.png`) VÀ MIME type (`image/jpeg`, `image/png`) 
+    để chống tải lên file thực thi độc hại (`.php`, `.exe`).
+  • Lưu trữ CDN: File ảnh được đẩy trực tiếp lên **Cloudinary CDN** qua HTTPS, 
+    chỉ lưu URL mã hóa vào bảng `participation_files`.
+  • AI Gemini 2.5 Flash & Fallback: Ngay khi nộp, Backend tự động gọi AI 
+    Gemini qua OpenRouter để tóm tắt nội dung báo cáo thành 2-3 câu 
+    (`ai_summary`). Nếu AI API bị quá tải hoặc mất mạng → Tự động kích hoạt 
+    **Local Extractive Fallback** (`mockSummary`) trích 2 câu đầu tiên, 
+    đảm bảo hệ thống KHÔNG BAO GIỜ BỊ SẬP."
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MÀN HÌNH 7: LEADERBOARD — BẢNG XẾP HẠNG                            │
+│  MÀN HÌNH 7: LEADERBOARD — BẢNG XẾP HẠNG & OPTIMIZED RAW SQL        │
 └─────────────────────────────────────────────────────────────────────┘
 
-"Leaderboard hiển thị bảng xếp hạng toàn hệ thống dựa trên tổng
-Eco-Points. Được tính bằng cách SUM tất cả point_logs của mỗi user.
+"Leaderboard vinh danh các cá nhân có tổng Eco-Points cao nhất toàn trường.
 
-  • Top 3 được highlight đặc biệt (medal icon).
-  • Hiển thị: Avatar, Tên, Tổng điểm, Badges đã đạt.
-  • Cron job chạy mỗi giờ kiểm tra Top 10 → cấp badge LEADERBOARD_RANK
-    tự động cho những user trong top."
+Về Tối ưu Truy vấn & Tự động hóa (Raw SQL & Cron Job):
+  • Để tính toán thứ hạng chính xác từ hàng vạn giao dịch điểm, Backend 
+    không qua Sequelize ORM mà chạy **Optimized Raw SQL** với câu lệnh 
+    `SUM(point_logs.points)` kết hợp window function `DENSE_RANK() OVER (...)`.
+  • Hệ thống tích hợp `node-cron` chạy ngầm mỗi giờ tự động rà soát 
+    Top 10 và trao Huy hiệu Bảng xếp hạng (`LEADERBOARD_RANK`)."
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MÀN HÌNH 8: PROFILE — TRANG CÁ NHÂN                                │
+│  MÀN HÌNH 8: PROFILE — TRANG CÁ NHÂN & ĐỔI MẬT KHẨU BẢO MẬT         │
 └─────────────────────────────────────────────────────────────────────┘
 
-"Trang Profile cho phép user:
+"Trang Profile quản lý thông tin cá nhân, avatar, danh hiệu và cài đặt giao diện.
 
-  • Xem và chỉnh sửa thông tin cá nhân (Họ tên, Lớp, Khoa, Mã SV).
-  • Upload avatar (Cloudinary).
-  • Chuyển đổi giao diện Sáng/Tối (Light/Dark theme — lưu vào DB
-    trường ui_theme để giữ trạng thái giữa các thiết bị).
-  • Đổi mật khẩu (ChangePasswordModal — yêu cầu nhập mật khẩu cũ).
-  • Xem danh sách Badges đã đạt được."
+Về Bảo mật Mật khẩu & Lưu trữ Trạng thái:
+  • Trường `ui_theme` (Light/Dark) được lưu trực tiếp vào CSDL MySQL để 
+    đồng bộ trạng thái giao diện nhất quán trên mọi thiết bị.
+  • Đổi mật khẩu: Bắt buộc xác thực lại mật khẩu cũ qua `bcrypt.compare()`. 
+    Mật khẩu mới được băm `bcrypt` an toàn trước khi lưu vào CSDL."
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MÀN HÌNH 9: ADMIN DASHBOARD — TỔNG QUAN QUẢN TRỊ                   │
+│  MÀN HÌNH 9: ADMIN DASHBOARD — TỔNG QUAN & EXPORT PDF/EXCEL        │
 └─────────────────────────────────────────────────────────────────────┘
 
-"Admin Dashboard hiển thị tổng quan toàn bộ hệ thống:
+"Admin Dashboard cung cấp cái nhìn toàn cảnh về chỉ số hệ thống, biểu đồ 
+phân bổ và lượt phản hồi 7 ngày gần nhất.
 
-  • Tổng số users, phân bổ theo Role (Student/Staff/Admin).
-  • Phân bổ theo Status (Pending/Approved/Rejected/Deactivated).
-  • Tổng surveys, phân bổ theo Status (Draft/Published/Closed).
-  • Số lượt trả lời khảo sát 7 ngày gần nhất (biểu đồ Daily Responses).
-  • Số minh chứng đang chờ duyệt (Pending Participations).
-
-  • Export PDF & Export Analytics: Tích hợp nút xuất báo cáo tổng quan hệ thống ra định dạng 
-    PDF chính thức và xuất kết quả phân tích chi tiết khảo sát ra file Excel (.xlsx) 
-    với định dạng cột chỉn chu.
-
-  Tất cả số liệu được tính bằng Promise.all() song song để tối ưu
-  thời gian phản hồi API."
+Về Tối ưu API & Xuất Báo cáo (Parallel Query & PDFKit/ExcelJS):
+  • Tối ưu API: Backend dùng `Promise.all()` thực thi 6 truy vấn SQL song song, 
+    giảm 80% thời gian phản hồi cho API `/api/admin/dashboard`.
+  • Export PDF Báo cáo (`PDFKit`): Xuất báo cáo tổng quan ra file PDF chuẩn. 
+    Hệ thống tích hợp font Roboto tiếng Việt Unicode, tự động căn lề `x = 50` 
+    và chuẩn hóa chiều rộng bảng `495px` tạo file PDF cân đối, chuyên nghiệp.
+  • Export Excel (`ExcelJS`): Xuất toàn bộ dữ liệu khảo sát ra file `.xlsx` 
+    với định dạng cột màu sắc rõ ràng."
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MÀN HÌNH 10: USER MANAGEMENT — QUẢN LÝ TÀI KHOẢN                   │
+│  MÀN HÌNH 10: USER MANAGEMENT — QUẢN LÝ TÀI KHOẢN & IMPORT EXCEL   │
 └─────────────────────────────────────────────────────────────────────┘
 
-"Admin quản lý toàn bộ danh sách user:
+"Màn hình cho phép Admin kiểm soát toàn bộ tài khoản người dùng trong trường.
 
-  • Phê duyệt tài khoản mới (Pending → Approved) với thông báo rõ ràng, hoặc Từ chối đơn đăng ký (Pending → Rejected kèm lý do).
-  • Khóa / Mở khóa tài khoản linh hoạt (Approved ↔ Locked) thay vì dùng chung trạng thái Rejected.
-  • Thay đổi Role (Student ↔ Staff ↔ Admin).
-  • Deactivate tài khoản (soft-delete).
-  • Tìm kiếm, lọc theo role/status.
-  • Phân trang giới hạn tối đa 100 users/page.
-
-  ── Import Excel (Thêm tài khoản hàng loạt) ───────────────────
-  • Admin chọn file Excel (.xlsx) danh sách người dùng gồm các cột: Họ tên, Username, Email, Mật khẩu, Role, Mã SV/NV, Lớp, Khoa.
-  • Backend sử dụng `Multer` nhận file buffer + `ExcelJS` đọc nội dung từng dòng.
-  • Tự động kiểm tra tính hợp lệ dữ liệu, mã hóa mật khẩu bằng `bcrypt`, gán status mặc định là 'Approved' và email_verified = true.
-  • Trả về phản hồi chi tiết số lượng bản ghi tạo thành công/thất bại kèm danh sách dòng bị lỗi cụ thể (trùng email, thiếu trường bắt buộc)."
+Về Quản lý Trạng thái & Import Hàng loạt:
+  • Hệ thống Trạng thái (`status`): Hỗ trợ `Approved` (cho phép đăng nhập), 
+    `Rejected` (từ chối đơn), và `Locked` (khóa tài khoản). Badge `Locked` 
+    được thiết kế màu Amber Neo-Brutalist nổi bật (`badge-locked`).
+  • Thông báo Đa kênh: Khi duyệt/từ chối/khóa, Backend lập tức gửi Email 
+    kết quả kèm lý do qua Gmail SMTP, đồng thời bắn thông báo real-time 
+    qua Socket.IO tới người dùng.
+  • Import Excel hàng loạt (`ExcelJS`): Admin tải lên file `.xlsx` danh sách 
+    sinh viên/nhân viên → Backend tự động đọc buffer, kiểm tra trùng lặp email, 
+    băm mật khẩu `bcrypt` và cấp trạng thái `Approved` ngay lập tức."
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MÀN HÌNH 11: SURVEY MANAGEMENT — QUẢN LÝ KHẢO SÁT                  │
+│  MÀN HÌNH 11: SURVEY MANAGEMENT — CẤU TRÚC KHẢO SÁT & CRON CLOSE    │
 └─────────────────────────────────────────────────────────────────────┘
 
-"Admin quản lý vòng đời khảo sát:
+"Admin quản lý trọn vẹn vòng đời bài khảo sát từ Soạn thảo (Draft) → 
+Phát hành (Published) → Đóng khảo sát (Closed).
 
-  ── Survey Editor (Tạo/Sửa khảo sát) ───────────────────────────
-  • Nhập: Tiêu đề, Mô tả, Đối tượng (All/Student/Staff), Thời gian.
-  • Thêm câu hỏi: Kéo thả loại câu hỏi (multiple_choice, text,),
-   tùy chỉnh options, đánh dấu required.
-  • Lưu Draft → Publish.
-
-  ── Survey Analytics ────────────────────────────────────────────
-  • Xem thống kê chi tiết từng survey: Tổng responses, phân bổ câu trả lời.
-
-  ── Survey Grading ──────────────────────────────────────────────
-  • Admin chấm điểm chi tiết cho từng response (nếu có câu tự luận).
-
-  ── Auto-Close Cron Job ─────────────────────────────────────────
-  • Cron chạy mỗi giờ: Tự động chuyển status Published → Closed cho
-    các survey đã qua end_date."
+Về Tự động đóng Khảo sát (Auto-Close Cron Job):
+  • Hệ thống tích hợp Cron Job chạy ngầm mỗi giờ: Quét các khảo sát có 
+    `end_date < NOW()` và tự động cập nhật `status = 'Closed'`, ngăn chặn 
+    người dùng làm bài quá hạn mà không cần Admin thao tác thủ công."
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MÀN HÌNH 12: PARTICIPATION REVIEW — DUYỆT MINH CHỨNG               │
+│  MÀN HÌNH 12: PARTICIPATION REVIEW — DUYỆT MINH CHỨNG & EXPORT PDF │
 └─────────────────────────────────────────────────────────────────────┘
 
-"Admin duyệt minh chứng hoạt động:
+"Admin xem xét và duyệt các minh chứng hoạt động môi trường do sinh viên gửi lên.
 
-  • Danh sách tất cả Participation đang Pending.
-  • Xem chi tiết: Thông tin sự kiện, ảnh minh chứng, AI summary.
-  • AI Summary giúp Admin đọc nhanh nội dung báo cáo dài.
-  • Approve → Cộng điểm (PointLog action_type = 'Event_Report') +
-    Notification real-time tới user.
-  • Reject → Nhập lý do → Notification tới user.
-
-  ── Export PDF Báo cáo Hoạt động ────────────────────────────────
-  • Admin click nút 'Export PDF' để xuất toàn bộ minh chứng hoạt động môi trường đã được phê duyệt (`Approved`).
-  • Backend sử dụng `PDFDocument` (`pdfkit`) đăng ký font Tiếng Việt Unicode (Roboto-Bold, Roboto-Regular, Roboto-Italic).
-  • File PDF bao gồm tiêu đề trang trọng, thời gian xuất bản, danh sách sự kiện, thông tin người nộp, địa điểm, số người tham gia, tóm tắt AI (ai_summary) và tên Admin phê duyệt."
+Về Hỗ trợ AI & Xuất Báo cáo Bằng chứng (AI & PDFKit):
+  • Đọc báo cáo nhanh nhờ `ai_summary` do Gemini AI tự động tóm tắt.
+  • Khi Admin bấm Approve → Hệ thống mở Transaction cộng 50 Eco-Points, 
+    kiểm tra cấp Huy hiệu, gửi Email mừng và bắn Socket.IO notification.
+  • Export PDF Minh chứng (`PDFKit`): Tự động tổng hợp danh sách các hoạt động 
+    đã `Approved` xuất thành file PDF chính thức kèm thông tin sự kiện, địa điểm, 
+    số người tham gia, tóm tắt AI và chữ ký duyệt của Admin."
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MÀN HÌNH 13: FAQ MANAGEMENT & AI CHATBOT                           │
+│  MÀN HÌNH 13: FAQ MANAGEMENT & AI CHATBOT (HYBRID AI FALLBACK)      │
 └─────────────────────────────────────────────────────────────────────┘
 
-"Admin quản lý bộ câu hỏi FAQ:
+"Màn hình quản lý bộ câu hỏi thường gặp FAQ và trợ lý AI Chatbot.
 
-  • CRUD: Thêm, sửa, xóa câu hỏi thường gặp.
-  • FAQ này chính là ngữ liệu (context) cho AI Chatbot.
-  • Khi user hỏi trên Landing Page hoặc trong app, AI Gemini sẽ chỉ trả
-    lời dựa trên ngữ liệu FAQ — không bịa thông tin.
-  • Nếu câu hỏi nằm ngoài FAQ → AI lịch sự từ chối và hướng dẫn
-    liên hệ Admin."
+Về Kiến trúc RAG & AI Fallback (OpenRouter & Local Matching):
+  • Trợ lý AI Gemini 2.5 Flash sử dụng toàn bộ CSDL `faqs` làm ngữ liệu 
+    chính (Context RAG), đảm bảo câu trả lời luôn chính xác với quy định 
+    nhà trường, không bị ảo giác (Hallucination).
+  • Hybrid AI Fallback: Nếu API AI mất kết nối hoặc hết hạn ngạch, 
+    hệ thống tự động kích hoạt `mockFAQAnswer()` tách từ khóa và so khớp 
+    truy vấn MySQL FAQ để trả về câu trả lời phù hợp nhất mà không bị ngắt quãng."
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MÀN HÌNH 14: REAL-TIME NOTIFICATION                                 │
+│  MÀN HÌNH 14: REAL-TIME NOTIFICATION (SOCKET.IO WEBSOCKET SYSTEM)   │
 └─────────────────────────────────────────────────────────────────────┘
 
-"Hệ thống thông báo real-time sử dụng Socket.IO:
+"Hệ thống thông báo tức thì hiển thị trên Navbar của tất cả màn hình.
 
-  • Mỗi user khi đăng nhập tự động kết nối WebSocket, join vào room
-    user_{userId}.
-  • Socket.IO xác thực bằng JWT token trong handshake.
-  • Khi có sự kiện (duyệt minh chứng, badge mới, survey mới...) →
-    Backend emit event tới room tương ứng → Frontend nhận và hiển thị
-    notification badge trên Navbar tức thì.
-  • Hỗ trợ multi-tab: Cùng 1 user mở nhiều tab trình duyệt đều nhận
-    được notification."
+Về Kiến trúc WebSocket & Multi-Tab Synchronization:
+  • Socket.IO Handshake Authentication: Khi kết nối WebSocket, Client bắt buộc 
+    truyền JWT Access Token trong handshake. Backend giải mã JWT xác thực 
+    mới cho phép kết nối và join vào room cá nhân `user_{userId}`.
+  • Đẩy thông báo tức thì: Khi có sự kiện (Duyệt bài, Cấp huy hiệu, Khảo sát mới), 
+    Backend emit event tới room `user_{userId}` → Tất cả các tab trình duyệt 
+    đang mở của người dùng đó đều nhận được popup thông báo đồng thời."
+
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
