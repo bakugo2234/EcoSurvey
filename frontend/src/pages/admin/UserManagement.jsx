@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, Check, X, Trash2, Filter, Users, ChevronDown, Upload, Lock, Unlock } from 'lucide-react'
+import { Search, Check, X, Trash2, Filter, Users, ChevronDown, Upload, Lock, Unlock, Download, AlertCircle } from 'lucide-react'
 import { adminService } from '../../services/adminService'
 import { SpinnerPage } from '../../components/ui/Spinner'
 import Pagination from '../../components/ui/Pagination'
@@ -36,6 +36,7 @@ export default function UserManagement() {
   const [importFile, setImportFile]   = useState(null)
   const [importErrors, setImportErrors] = useState([])
   const [actionLoading, setActionLoading] = useState(false)
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false)
 
   const fetch = async (p = 1) => {
     setLoading(true)
@@ -75,6 +76,25 @@ export default function UserManagement() {
       fetch(page)
     } catch (err) { toast.error(err.response?.data?.message || t('userManagement.deleteFailed')) }
     finally { setActionLoading(false) }
+  }
+
+  const handleDownloadTemplate = async () => {
+    try {
+      setDownloadingTemplate(true)
+      const res = await adminService.downloadUserTemplate()
+      const url = window.URL.createObjectURL(new Blob([res.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', 'EcoSurvey_User_Import_Template.xlsx')
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Không thể tải file mẫu.')
+    } finally {
+      setDownloadingTemplate(false)
+    }
   }
 
   const handleImport = async (e) => {
@@ -265,28 +285,64 @@ export default function UserManagement() {
       </Modal>
 
       {/* Import Modal */}
-      <Modal isOpen={importModalOpen} onClose={() => { setImportModalOpen(false); setImportFile(null); setImportErrors([]) }} title={t('userManagement.importTitle')}>
+      <Modal isOpen={importModalOpen} onClose={() => { setImportModalOpen(false); setImportFile(null); setImportErrors([]) }} title={t('userManagement.importTitle')} size="lg">
         <div className="space-y-4">
-          <p className="text-sm text-earth-ink/70">
-            {t('userManagement.importDesc1')}<br/>
-            <strong>{t('userManagement.importDesc2')}</strong>
-          </p>
-          <input
-            type="file"
-            accept=".xlsx"
-            onChange={(e) => setImportFile(e.target.files[0])}
-            className="w-full text-sm text-earth-ink file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-earth-sand file:text-earth-ink hover:file:bg-earth-sand/80"
-          />
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-xl p-3 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <p>{t('userManagement.importNotice')}</p>
+          </div>
+
+          <div>
+            <p className="text-sm text-earth-ink/80 dark:text-gray-300 mb-1">
+              {t('userManagement.importDesc1')}
+            </p>
+            <p className="text-xs font-mono bg-gray-100 dark:bg-gray-800 p-2.5 rounded-lg text-gray-700 dark:text-gray-300 leading-relaxed">
+              {t('userManagement.importDesc2')}
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-xs text-gray-500">{t('userManagement.downloadTemplateDesc', 'Chưa có file mẫu chuẩn?')}</span>
+            <button
+              type="button"
+              onClick={handleDownloadTemplate}
+              disabled={downloadingTemplate}
+              className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5 hover:bg-earth-sand/50"
+            >
+              {downloadingTemplate ? (
+                <span className="w-3.5 h-3.5 border-2 border-brand-600/30 border-t-brand-600 rounded-full animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5 text-brand-600" />
+              )}
+              {downloadingTemplate ? t('userManagement.downloadingTemplate') : t('userManagement.downloadTemplate')}
+            </button>
+          </div>
+
+          <div className="border border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-4 text-center">
+            <input
+              type="file"
+              accept=".xlsx"
+              id="excel-file-input"
+              onChange={(e) => setImportFile(e.target.files[0])}
+              className="w-full text-sm text-earth-ink file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-earth-sand file:text-earth-ink hover:file:bg-earth-sand/80 cursor-pointer"
+            />
+          </div>
+
           {importErrors.length > 0 && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-md text-xs max-h-32 overflow-y-auto">
-              <p className="font-bold mb-1">{t('userManagement.importErrors')}</p>
-              <ul className="list-disc pl-4 space-y-1">
+            <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 p-3.5 rounded-xl text-xs max-h-48 overflow-y-auto">
+              <p className="font-bold mb-1.5 flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4" /> {t('userManagement.importErrors')} ({importErrors.length})
+              </p>
+              <ul className="list-disc pl-5 space-y-1">
                 {importErrors.map((err, idx) => <li key={idx}>{err}</li>)}
               </ul>
             </div>
           )}
+
           <div className="flex gap-3 pt-2">
-            <button onClick={() => { setImportModalOpen(false); setImportFile(null); setImportErrors([]) }} className="btn-secondary flex-1">{t('userManagement.cancel')}</button>
+            <button onClick={() => { setImportModalOpen(false); setImportFile(null); setImportErrors([]) }} className="btn-secondary flex-1">
+              {t('userManagement.cancel')}
+            </button>
             <button onClick={handleImport} disabled={actionLoading || !importFile}
               className="btn-primary flex-1 flex items-center justify-center gap-2">
               {actionLoading ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Upload className="w-4 h-4" />}

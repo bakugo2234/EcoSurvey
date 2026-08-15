@@ -4,6 +4,7 @@ import api from './axiosInstance'
 export const adminService = {
   // User management.
   getUsers: (params) => api.get('/admin/users', { params }),
+  downloadUserTemplate: () => api.get('/admin/users/template', { responseType: 'blob' }),
   importUsers: (formData) => api.post('/admin/users/import', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),

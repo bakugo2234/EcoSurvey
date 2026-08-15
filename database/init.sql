@@ -11,9 +11,9 @@ SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS `user_badges`, `notifications`, `point_logs`, `participation_files`, `participations`, `survey_answers`, `survey_responses`, `questions`, `surveys`, `refresh_tokens`, `password_resets`, `faqs`, `badges`, `users`;
 
 -- ── Tạo mới database (Bỏ qua nếu đang dùng database có sẵn như Railway) ──
--- DROP DATABASE IF EXISTS `ecosurvey`;
--- CREATE DATABASE `ecosurvey` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
--- USE `ecosurvey`;
+DROP DATABASE IF EXISTS `ecosurvey`;
+CREATE DATABASE `ecosurvey` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `ecosurvey`;
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: users

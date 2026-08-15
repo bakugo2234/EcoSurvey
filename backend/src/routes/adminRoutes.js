@@ -13,6 +13,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // ── Users Management ──────────────────────────────
 router.get('/users', ...isAdmin, adminCtrl.getUsers);
+router.get('/users/template', ...isAdmin, adminCtrl.downloadUserTemplate);
 router.post('/users/import', ...isAdmin, upload.single('file'), adminCtrl.importUsers);
 router.patch('/users/:id/status', ...isAdmin, adminCtrl.updateUserStatus);
 router.delete('/users/:id', ...isAdmin, adminCtrl.deleteUser);

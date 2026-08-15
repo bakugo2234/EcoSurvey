@@ -30,6 +30,9 @@ const User = testDb.define('users', {
   password_hash: { type: DataTypes.STRING },
   role:          { type: DataTypes.STRING, defaultValue: 'Student' },
   status:        { type: DataTypes.STRING, defaultValue: 'Approved' },
+  student_staff_id: { type: DataTypes.STRING, allowNull: true },
+  class_name:       { type: DataTypes.STRING, allowNull: true },
+  department:       { type: DataTypes.STRING, allowNull: true },
   ui_theme:      { type: DataTypes.STRING, defaultValue: 'light' },
   avatar_url:    { type: DataTypes.STRING, allowNull: true },
   reject_reason: { type: DataTypes.TEXT, allowNull: true },
@@ -214,3 +217,91 @@ describe('PUT /api/admin/surveys/responses/:id/score', () => {
     expect(updated.opinion_score).toBe(8);
   });
 });
+
+// ─────────────────────────────────────────────────────────────
+describe('GET /api/admin/users/template', () => {
+  test('Admin can download Excel import template', async () => {
+    const res = await request(app)
+      .get('/api/admin/users/template')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  });
+
+  test('Student cannot download admin user template → 403', async () => {
+    const res = await request(app)
+      .get('/api/admin/users/template')
+      .set('Authorization', `Bearer ${studentToken}`);
+    expect(res.status).toBe(403);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+describe('POST /api/admin/users/import', () => {
+  const ExcelJS = require('exceljs');
+
+  const createTestExcelBuffer = async (rows) => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Users');
+    worksheet.addRow(['Họ và tên', 'Username', 'Email', 'Mật khẩu', 'Vai trò', 'Mã SV/CB', 'Lớp', 'Khoa/Phòng']);
+    rows.forEach(r => worksheet.addRow(r));
+    return await workbook.xlsx.writeBuffer();
+  };
+
+  test('Rejects import if no file is provided → 400', async () => {
+    const res = await request(app)
+      .post('/api/admin/users/import')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(400);
+  });
+
+  test('Rejects Admin accounts and missing required fields', async () => {
+    const buffer = await createTestExcelBuffer([
+      // Row 2: Attempt to import Admin
+      ['Admin Hacker', 'hackadmin', 'hack@test.com', 'Pass123456', 'Admin', 'AD001', 'AdminClass', 'Security'],
+      // Row 3: Student missing class
+      ['Student Missing Class', 'noclass_sv', 'noclass@test.com', 'Pass123456', 'Student', 'SV999', '', 'CNTT'],
+      // Row 4: Student missing department
+      ['Student Missing Dept', 'nodept_sv', 'nodept@test.com', 'Pass123456', 'Student', 'SV998', 'K20-CNTT', ''],
+      // Row 5: Staff missing department
+      ['Staff Missing Dept', 'nodept_staff', 'nodeptstaff@test.com', 'Pass123456', 'Staff', 'CB999', '', ''],
+      // Row 6: Valid student
+      ['Valid Student', 'validstudent', 'validstudent@test.com', 'Pass123456', 'Student', 'SV100', 'K20-CNTT', 'Công nghệ thông tin'],
+      // Row 7: Valid staff
+      ['Valid Staff', 'validstaff', 'validstaff@test.com', 'Pass123456', 'Staff', 'CB100', '', 'Phòng Đào tạo'],
+    ]);
+
+    const res = await request(app)
+      .post('/api/admin/users/import')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .attach('file', buffer, 'users.xlsx');
+
+    expect(res.status).toBe(200);
+    expect(res.body.successful).toBe(2);
+    expect(res.body.failed).toBe(4);
+    expect(res.body.errors.some(e => e.includes('Quản trị viên (Admin)'))).toBe(true);
+    expect(res.body.errors.some(e => e.includes('Sinh viên'))).toBe(true);
+    expect(res.body.errors.some(e => e.includes('Cán bộ'))).toBe(true);
+
+    // Verify Admin user was NOT created
+    const hackerAdmin = await User.findOne({ where: { username: 'hackadmin' } });
+    expect(hackerAdmin).toBeNull();
+
+    // Verify incomplete student was NOT created
+    const noClassStudent = await User.findOne({ where: { username: 'noclass_sv' } });
+    expect(noClassStudent).toBeNull();
+
+    // Verify valid accounts WERE created
+    const validStudent = await User.findOne({ where: { username: 'validstudent' } });
+    expect(validStudent).not.toBeNull();
+    expect(validStudent.role).toBe('Student');
+    expect(validStudent.class_name).toBe('K20-CNTT');
+    expect(validStudent.department).toBe('Công nghệ thông tin');
+
+    const validStaff = await User.findOne({ where: { username: 'validstaff' } });
+    expect(validStaff).not.toBeNull();
+    expect(validStaff.role).toBe('Staff');
+    expect(validStaff.department).toBe('Phòng Đào tạo');
+  });
+});
+
